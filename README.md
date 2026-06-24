@@ -59,8 +59,6 @@ SolarMon/
 └── README.md
 ```
 
-> **Nota:** los nombres de carpeta dentro de `firmware/` pueden simplificarse a un único nivel (todos los `.cpp`/`.h` juntos) si tu IDE de Arduino lo requiere — Arduino IDE exige que todos los archivos del sketch estén en la misma carpeta que el `.ino` principal. Ver la sección *Cómo compilar* más abajo.
-
 ---
 
 ## Hardware necesario
@@ -83,24 +81,6 @@ SolarMon/
   pip install paho-mqtt matplotlib numpy scipy
   ```
   (`tkinter` viene incluido en la instalación estándar de Python en la mayoría de sistemas; en Linux puede requerir `sudo apt install python3-tk`).
-
----
-
-## Configuración antes de compilar / ejecutar
-
-Este repositorio **no incluye credenciales reales**. Antes de compilar el firmware o ejecutar la interfaz, crea tu propio archivo de configuración:
-
-**`firmware/secrets.h`** (no se sube al repositorio, está en `.gitignore`):
-```cpp
-#define WIFI_SSID     "TU_SSID"
-#define WIFI_PASSWORD "TU_PASSWORD_WIFI"
-#define MQTT_SERVER   "tu-cluster.s1.eu.hivemq.cloud"
-#define MQTT_PORT     8883
-#define MQTT_USER     "tu_usuario_mqtt"
-#define MQTT_PASSWORD "tu_password_mqtt"
-```
-
-En la interfaz Python, los mismos datos se configuran al inicio del script (`broker`, `port`, `username`, `password`).
 
 ---
 
