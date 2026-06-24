@@ -1,0 +1,31 @@
+# Dirreciones MACs
+
+-       80:65:99:BB:DE:14
+-       48:27:E2:8F:8C:AC
+-       80:65:99:BB:B1:80
+-       80:65:99:BB:A4:A8
+-       80:65:99:B9:F8:EC
+
+
+# Comandos para cambiar los nombres 
+-       EMPTY//80:65:99:BB:DE:14//EHU1
+-       EMPTY//48:27:E2:8F:8C:AC//EHU2
+-       EMPTY//80:65:99:BB:B1:80//EHU3
+-       EMPTY//80:65:99:BB:A4:A8//EHU4
+-       EMPTY//80:65:99:B9:F8:EC//EHU5
+
+
+# Comandos para casilla CONFIG
+
+
+-        EHU5//80:65:99:B9:F8:EC//Check
+-        EHU5//80:65:99:B9:F8:EC//Coms
+-        EHU5//80:65:99:B9:F8:EC//Monit
+-        EHU5//80:65:99:B9:F8:EC//Reset
+
+# Comandos para casilla REQUEST
+-        EHU5//80:65:99:B9:F8:EC//OP
+-        EHU5//80:65:99:B9:F8:EC//MPP
+-        EHU5//80:65:99:B9:F8:EC//IV
+-        EHU5//80:65:99:B9:F8:EC//TGHI
+-        EHU5//80:65:99:B9:F8:EC//Full
