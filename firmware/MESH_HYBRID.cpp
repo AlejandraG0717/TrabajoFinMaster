@@ -1,17 +1,11 @@
 // ============================================================
 //  MESH_HYBRID.cpp — Implementación
-//  VERSION CORREGIDA v2.0
-//  Cambios principales:
-//    1. Reenvío de heartbeats: cuando un nodo recibe HB por malla, 
-//       si es gateway lo reenvía por MQTT
-//    2. Si no es gateway, propaga el heartbeat por la malla hacia el gateway
-//    3. Mejor manejo de mensajes tipo "data" para reenvío robusto
 //============================================================
 
 #include "MESH_HYBRID.h"
 #include <ArduinoJson.h>
 #include <WiFi.h>
-#include "esp_wifi.h"   // scan pasivo sin interrumpir painlessMesh
+#include "esp_wifi.h"  
 
 // ══════════════════════════════════════════════════════════════
 //  Variables públicas (definición)
@@ -54,9 +48,6 @@ static bool           _meshActiva   = false;
 
 static bool           _enTransicion = false;
 
-// Bandera de seguridad: las tareas del scheduler NO pueden llamar
-// _activarModoGateway() directamente (causa crash InstrFetchProhibited).
-// Activan esta bandera y mesh_loop() hace la transición de forma segura.
 static volatile bool  _pedirActivarGW = false;
 static uint32_t       _tsTransicion = 0;
 static const uint32_t TRANSICION_COOLDOWN_MS = 3000;
@@ -70,7 +61,6 @@ static const uint32_t WIFI_DESCONECTADO_TIMEOUT_MS = 10000;
 static uint32_t       _tsTopologia    = 0;
 static const uint32_t TOPOLOGIA_INTERVALO_MS = 15000;
 
-// NUEVO: Timestamp para evaluar si debemos postularnos como GW
 static uint32_t       _tsEvalGWPostulacion = 0;
 static const uint32_t GW_POSTULACION_INTERVALO_MS = 5000;
 
@@ -88,11 +78,7 @@ static void _activarModoNodo();
 static void _ajustarPotenciaAntena();
 static void _reiniciarMalla();
 
-// Detecta el canal WiFi real del router mediante un scan rápido.
-// Se usa para forzar a TODOS los nodos de la malla al mismo canal,
-// evitando que cada uno elija uno distinto al arrancar y queden
-// aislados entre sí (el GATEWAY cambia de canal al conectar al router,
-// pero los NODO no se enteran si no comparten el canal desde el inicio).
+
 static int _detectarCanalRouter() {
     WiFi.mode(WIFI_STA);
     delay(100);
@@ -113,9 +99,6 @@ static int _detectarCanalRouter() {
     return canal;
 }
 
-// Canal fijo de la malla — se calcula una sola vez al primer arranque
-// y se reutiliza en todas las reinicializaciones para que GATEWAY y
-// NODO siempre coincidan en el mismo canal WiFi.
 static int _canalMallaFijo = 0;
 static void _evaluarCambioDeModo();
 static void _recibirMensaje(uint32_t from, String& msg);
@@ -127,7 +110,6 @@ static String _obtenerTopologiaJSON();
 static void _publicarTopologia();
 static void _evaluarPostulacionGW();
 
-// CORRECCIÓN v2.0: Función para reenviar heartbeat por MQTT
 static void _reenviarHeartbeatMQTT(const String& pvsx, const String& mac, 
                                    const String& modoStr);
 
@@ -421,9 +403,6 @@ static int _medirRSSI() {
         _procesarScan();
         return _rssiEscaneado;
     }
-    // MODO NODO: NO hacer ninguna operación WiFi aquí — esta función se
-    // llama desde el scheduler de painlessMesh. El scan se hace en
-    // mesh_loop() con esp_wifi de bajo nivel, fuera del scheduler.
     return _rssiEscaneado;
 }
 
@@ -474,8 +453,6 @@ static void _evaluarPostulacionGW() {
     if (ahora - _tsEvalGWPostulacion < GW_POSTULACION_INTERVALO_MS) return;
     _tsEvalGWPostulacion = ahora;
 
-    // Periodo de gracia al arrancar: esperar a escuchar vecinos antes de
-    // postularse, para detectar si alguien más tiene mejor señal.
     static uint32_t _tsArranqueModo = 0;
     if (_tsArranqueModo == 0) _tsArranqueModo = millis();
     if (ahora - _tsArranqueModo < 20000) {
@@ -484,9 +461,6 @@ static void _evaluarPostulacionGW() {
         return;
     }
 
-    // ¿Hay un vecino no-gateway con mejor señal que la mía visto recientemente?
-    // Si lo hay, le doy prioridad y no me postulo — evita que dos nodos sin
-    // gateway se autodeclaren gateway al mismo tiempo.
     bool datoVecinoVigente = (ahora - _tsMejorRSSIVecino) < VECINO_RSSI_VIGENCIA_MS;
     int  rssiPropio        = _rssiEscaneado;
 
@@ -500,8 +474,6 @@ static void _evaluarPostulacionGW() {
         mesh_miRSSI = rssiPropio;
         Serial.printf("[MESH ] No hay GW. Mi RSSI (%d) > umbral (%d). Solicitando GATEWAY...\n",
                      rssiPropio, RSSI_GATEWAY);
-        // NO llamar _activarModoGateway() directamente desde el scheduler
-        // (causa InstrFetchProhibited) — se delega a mesh_loop() vía bandera.
         _pedirActivarGW = true;
     } else {
         Serial.printf("[MESH ] No hay GW. Mi RSSI (%d) insuficiente para postular (umbral: %d). Esperando...\n",
@@ -548,8 +520,6 @@ static void _activarModoGateway() {
     _enTransicion = true;
     _tsTransicion = millis();
 
-    // Detener malla completamente antes de reconfigurarla como gateway,
-    // necesario tanto desde NODO como desde DIRECTO.
     if (_meshActiva) {
         _mesh.stop();
         _meshActiva = false;
@@ -595,10 +565,6 @@ static void _reiniciarMalla() {
     _ajustarPotenciaAntena();
     delay(100);
 
-    // Determinar el canal una sola vez (al primer arranque) y reutilizarlo
-    // siempre. Así GATEWAY y NODO arrancan ya en el mismo canal WiFi y
-    // pueden verse entre sí desde el principio, sin depender de que el
-    // cambio de canal se propague dinámicamente por la malla.
     if (_canalMallaFijo == 0) {
         _canalMallaFijo = _detectarCanalRouter();
     }
@@ -658,8 +624,6 @@ static void _tomarGateway() {
     _mesh.setRoot(true);
     _mesh.setContainsRoot(true);
     delay(100);
-    // Como ya arrancamos en el canal correcto (_canalMallaFijo detectado
-    // antes), stationManual() solo necesita autenticarse, no cambiar canal.
     _mesh.stationManual(_wifiSSID, _wifiPass);
 
     Serial.printf("[MESH ] Soy GATEWAY: %s (%d dBm)\n", mesh_nodeID.c_str(), mesh_miRSSI);
@@ -678,9 +642,6 @@ static void _cederGateway() {
     mesh_idGateway    = "";
     _rssiGateway      = -100;
     _wifiAntes        = false;
-    // NO resetear mesh_miRSSI ni _rssiEscaneado: el RSSI físico no
-    // cambia por ceder el rol. Resetearlos a -100 impediría volver
-    // a postularse aunque la señal siga siendo buena.
     _mejorRSSIVecinoNoGW = -100;
     _tsMejorRSSIVecino   = 0;
 
@@ -765,23 +726,17 @@ static void _revisarRol() {
         if (mesh_miRSSI < RSSI_GATEWAY - RSSI_HISTERESIS) {
             Serial.printf("[MESH ] Mi señal cayó a %d dBm (umbral GW: %d), cediendo GW...\n",
                          mesh_miRSSI, RSSI_GATEWAY);
-            // NOTA: _activarModoNodo() llama a _reiniciarMalla() que hace
-            // _mesh.stop()/_mesh.init(). Esta función corre desde _taskRevisar
-            // (scheduler), igual que el camino que causaba crash con GATEWAY.
-            // Si en pruebas aparece InstrFetchProhibited aquí también,
-            // aplicar el mismo patrón de bandera + mesh_loop() que se usa
-            // para _pedirActivarGW.
             _cederGateway();
             _activarModoNodo();
         }
         return;
     }
 
-    // Modo DIRECTO no revisa rol
+    
 }
 
 // ══════════════════════════════════════════════════════════════
-//  CORRECCIÓN v2.0: REENVÍO DE HEARTBEAT POR MQTT
+//  REENVÍO DE HEARTBEAT POR MQTT
 // ══════════════════════════════════════════════════════════════
 
 static void _reenviarHeartbeatMQTT(const String& pvsx, const String& mac, 
@@ -843,9 +798,6 @@ static void _recibirMensaje(uint32_t from, String& msg) {
                 _activarModoNodo();
             }
 
-            // Registrar el mejor RSSI visto entre vecinos no-gateway.
-            // Evita que dos nodos sin gateway se postulen al mismo tiempo:
-            // antes de postularme, compruebo si algún vecino me supera.
             if (rssiRemoto > _mejorRSSIVecinoNoGW) {
                 _mejorRSSIVecinoNoGW = rssiRemoto;
             }
@@ -881,7 +833,7 @@ static void _recibirMensaje(uint32_t from, String& msg) {
         return;
     }
 
-    // CORRECCIÓN v2.0: Reenvío de heartbeats que vienen por malla
+    // Reenvío de heartbeats que vienen por malla
     if (tipo == "heartbeat") {
         String pvsxHb = doc["pvsx"] | "EMPTY";
         String macHb  = doc["mac"]  | "";
@@ -895,7 +847,6 @@ static void _recibirMensaje(uint32_t from, String& msg) {
             _reenviarHeartbeatMQTT(pvsxHb, macHb, modoHb);
         } else {
             // Si no soy gateway, propagar hacia el gateway
-            // (painlessMesh ya hace broadcast, así que llegará al GW)
             Serial.println("[MESH ] Propagando heartbeat hacia gateway...");
         }
         return;
@@ -911,10 +862,6 @@ static void _recibirMensaje(uint32_t from, String& msg) {
         return;
     }
 
-    // Reenvío de comandos GATEWAY→NODO (dirección opuesta a "data").
-    // El GATEWAY recibe REQUEST/CONFIG por MQTT, los empaqueta como
-    // tipo "comando" y hace broadcast. Cada NODO verifica si la MAC
-    // del payload coincide con la suya y lo procesa si es así.
     if (tipo == "comando") {
         String topic   = doc["topic"]   | "";
         String payload = doc["payload"] | "";
@@ -950,8 +897,6 @@ void mesh_reenviarComando(const String& topic, const String& payload) {
 // ══════════════════════════════════════════════════════════════
 
 void mesh_publicar(const String& topic, const String& payload) {
-    // CORRECCIÓN v2.1: Si es un heartbeat, enviarlo como tipo "heartbeat" 
-    // para que otros nodos (especialmente el gateway) lo identifiquen y reenvíen
     bool esHeartbeat = payload.indexOf("//HB") >= 0;
 
     if (esHeartbeat) {
@@ -1155,10 +1100,6 @@ void mesh_loop() {
         }
     } else { tsGatewayStart = 0; }
 
-    // ── MODO NODO: scan pasivo con esp_wifi — NO toca la malla ───────────────
-    // WiFi.scanNetworks() y _mesh.stop()/_mesh.init() desde aquí causarían
-    // InstrFetchProhibited si el scheduler de painlessMesh sigue corriendo.
-    // esp_wifi_scan_start() en modo no bloqueante convive de forma segura.
     static uint32_t tsScanNodo    = 0;
     static bool     scanPendiente = false;
 
@@ -1230,10 +1171,6 @@ void mesh_loop() {
     }
 
     // ── Detección cambio WiFi — SOLO GATEWAY y DIRECTO usan MQTT ──────────────
-    // CRÍTICO: en modo NODO, WiFi.status()==WL_CONNECTED puede ser cierto
-    // porque painlessMesh conecta internamente a la subred de la malla
-    // (IPs tipo 10.x.x.x), pero esa conexión NO tiene ruta al broker MQTT.
-    // Si no se filtra por modo, el NODO intenta MQTT y falla en bucle.
     if (tieneWifi && !_wifiAntes &&
         (mesh_modoActual == MESH_MODO_GATEWAY || mesh_modoActual == MESH_MODO_DIRECTO)) {
         _wifiAntes = true;
