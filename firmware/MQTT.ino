@@ -154,10 +154,6 @@ void reconnect() {
         client.subscribe(TOPIC_R.c_str());
         client.subscribe("solar/malla/topologia");
 
-        // El GATEWAY también escucha +/REQUEST y +/CONFIG para poder
-        // reenviar por malla los comandos dirigidos a otros nodos.
-        // El NODO suscribe solo su propio tópico pero al estar offline
-        // de MQTT, quien lo recibe es siempre el GATEWAY.
         if (mesh_esGateway) {
             client.subscribe("+/REQUEST");
             client.subscribe("+/CONFIG");
@@ -183,8 +179,6 @@ void reconnect() {
 
 // ============================================================
 // Handler para comandos recibidos por la malla (GATEWAY → NODO).
-// El GATEWAY reenvió un REQUEST/CONFIG que llegó por MQTT —
-// aquí el NODO verifica si la MAC es la suya y lo procesa.
 // ============================================================
 void onComandoPorMalla(const String& topic, const String& msg) {
     Serial.println("\n===== MALLA → SolarMon (comando reenviado) =====");
@@ -200,8 +194,6 @@ void onComandoPorMalla(const String& topic, const String& msg) {
 
     Serial.println("Comando confirmado para este nodo.");
 
-    // Procesar exactamente igual que si hubiera llegado por MQTT directo:
-    // reutiliza el mismo callback() que ya valida topic y ejecuta comandos.
     callback(const_cast<char*>(topic.c_str()),
              (byte*)msg.c_str(),
              msg.length());
@@ -231,9 +223,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String mac = msg.substring(p1 + 2, p2);
 
     if (mac != uC_name) {
-        // Si soy GATEWAY y el tópico es REQUEST o CONFIG, reenviar por
-        // la malla para que el nodo destino (identificado por su MAC
-        // dentro del payload) lo reciba y procese.
         if (mesh_esGateway && (t.endsWith("/REQUEST") || t.endsWith("/CONFIG"))) {
             Serial.println("[MESH ] Comando para otro nodo, reenviando por malla → " + mac);
             mesh_reenviarComando(t, msg);
@@ -505,10 +494,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // ============================================================
 // PROCESAMIENTO DE MENSAJES DE LA MALLA (desde MESH_HYBRID)
-// ============================================================
-// Esta función es llamada por MESH_HYBRID.cpp cuando un nodo
-// remoto envía datos tipo "data" por la malla.
-// El gateway debe reenviarlos al broker MQTT.
 // ============================================================
 
 void procesarMensajeMalla(const String& topic, const String& payload) {
