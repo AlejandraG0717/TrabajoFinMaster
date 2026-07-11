@@ -13,9 +13,6 @@
 //    2. Emitir N pulsos: DescargaA ON → delay → DescargaA OFF → delay
 //    3. Volver al estado seguro
 //
-//  Nota: NO cargamos condensadores antes del pulso.
-//  Usamos DescargaA directamente como interruptor de corriente
-//  para crear una variación transitoria en el string.
 // ══════════════════════════════════════════════════════════════
 
 void perturb_inyectar() {
@@ -54,10 +51,6 @@ void perturb_inyectar() {
 //    2. Calcular la línea base (promedio de las primeras muestras)
 //    3. Calcular la variación máxima respecto a la base
 //    4. Si la variación supera PERTURB_UMBRAL_ADC → detectado
-//
-//  El tren de pulsos crea un patrón de variaciones periódicas
-//  en PIN_VI. Buscar la variación máxima es suficiente para
-//  confirmar la presencia de la perturbación.
 // ══════════════════════════════════════════════════════════════
 
 bool perturb_escuchar(int& magnitud_out) {
