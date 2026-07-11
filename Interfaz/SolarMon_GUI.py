@@ -41,14 +41,14 @@ COLORS = {
 }
 
 CALIBRACION = {
-    'V_MODULE': 74.16,   # V_raw / 74 = V_real  (usado en comando OP)
-    'V23_MOD':   102.66,   # Ajusta con tus mediciones
-    'V13_MOD':   205.30,   # Ajusta con tus mediciones
-    'I_string':  167,  # I_raw / 2.23 = I_real (corriente total del string)
+    'V_MODULE': 74.16,  
+    'V23_MOD':   102.66,   
+    'V13_MOD':   205.30,   
+    'I_string':  167,  
 
     # Calibración para la curva IV (MONI_BJT_nuevo usa los pines VI e I_string,
-    'VI_curva':       74.16,   # factor para el canal VI (voltaje) en la curva IV
-    'I_string_curva': 167,    # factor para el canal I_string (corriente) en la curva IV
+    'VI_curva':       74.16,   
+    'I_string_curva': 167,    
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -65,18 +65,15 @@ topic_empty_config = "EMPTY/CONFIG"
 nodes              = {}
 NODE_TIMEOUT_SECONDS = 60
 
-# Gráfica IV — se guardan las 3 curvas por separado para poder
-# compararlas sin que una sobrescriba a la otra.
-# El tipo se infiere del último comando IV/IV23/IV13 que la propia
-# interfaz envió, ya que el Arduino no incluye el tipo en el payload IVP.
-iv_curvas      = {}    # {"MO": {"v":[...], "i":[...]}, "MO23": {...}, "MO13": {...}}
-iv_voltages    = []    # compatibilidad — apunta a la última curva recibida
+
+iv_curvas      = {}    
+iv_voltages    = []    
 iv_currents    = []
 op_point       = None
 mpp_point      = None
 iv_blocks      = {}
 iv_total_blocks = 0
-iv_tipo_pendiente = "MO"   # tipo de la última solicitud IV/IV23/IV13 enviada
+iv_tipo_pendiente = "MO"   
 
 IV_COLORES = {
     "MO":   {"color": "steelblue",  "nombre": "Completo (MO)"},
@@ -291,8 +288,8 @@ text_area_empty_config.grid(row=0, column=1, sticky='nsew', padx=5)
 tab_iv_curve = tk.Frame(notebook, bg=COLORS['bg_light'])
 notebook.add(tab_iv_curve, text="  📈 Curva IV  ")
 
-tab_iv_curve.grid_columnconfigure(0, weight=3)   # columna izquierda: curva IV (más ancha)
-tab_iv_curve.grid_columnconfigure(1, weight=2)   # columna derecha: V e I por separado
+tab_iv_curve.grid_columnconfigure(0, weight=3)   
+tab_iv_curve.grid_columnconfigure(1, weight=2)  
 tab_iv_curve.grid_rowconfigure(1, weight=1)
 
 # ── Header ───────────────────────────────────────────────────
