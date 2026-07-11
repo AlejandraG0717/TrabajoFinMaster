@@ -1,5 +1,5 @@
 // ============================================================
-//  MESH_HYBRID.h — v6.1 con TOPOLOGÍA y estado nodo corregido
+//  MESH_HYBRID.h 
 // ============================================================
 
 #ifndef MESH_HYBRID_H
